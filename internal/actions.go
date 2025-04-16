@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -102,20 +103,58 @@ func AssignTagToDevice(ctx context.Context, conn *grpc.ClientConn, workspaceID, 
 	fmt.Printf("📌 Tag '%s=%s' assigné à device %s\n", label, value, deviceID)
 }
 
-func ReadInventory(ctx context.Context, conn *grpc.ClientConn, model string) []DeviceInfo {
+func ReadInventory(ctx context.Context, conn *grpc.ClientConn, model string, mlagFilter, danzFilter bool) []DeviceInfo {
+	// ❌ Protection : un seul des deux filtres doit être activé
+	if mlagFilter && danzFilter {
+		panic("❌ Impossible d'utiliser simultanément les filtres MLAG et DANZ (limitation API CVaaS).")
+	}
+
 	client := inventory.NewDeviceServiceClient(conn)
 	var req inventory.DeviceStreamRequest
 
-	// ➤ Si un filtre model est fourni, on le passe dans la requête
+	// ❌ Protection : mlag et danz ne doivent pas être utilisés ensemble
+	if mlagFilter && danzFilter {
+		panic("❌ Impossible d'utiliser simultanément les filtres MLAG et DANZ.")
+	}
+
+	// ✅ Construction dynamique du filtre JSON
+	filterMap := map[string]interface{}{}
+
 	if model != "" {
-		fmt.Println("passage dans model")
-		data := fmt.Sprintf(`{"partialEqFilter":[{"modelName":"%s"}]}`, model)
-		if err := protojson.Unmarshal([]byte(data), &req); err != nil {
-			panic(fmt.Sprintf("Erreur parsing JSON filtre modèle : %v", err))
+		filterMap["modelName"] = model
+	}
+
+	if mlagFilter {
+		filterMap["extendedAttributes"] = map[string]interface{}{
+			"featureEnabled": map[string]bool{
+				"Mlag": true,
+			},
+		}
+	} else if danzFilter {
+		filterMap["extendedAttributes"] = map[string]interface{}{
+			"featureEnabled": map[string]bool{
+				"Danz": true,
+			},
 		}
 	}
-	stream, err := client.GetAll(ctx, &req)
 
+	// ➤ Si au moins un filtre actif, construire l'objet final
+	if len(filterMap) > 0 {
+		filterObj := map[string]interface{}{
+			"partialEqFilter": []interface{}{filterMap}, // ✅ un seul objet = ET logique
+		}
+
+		jsonData, err := json.Marshal(filterObj)
+		if err != nil {
+			panic(fmt.Sprintf("Erreur json.Marshal : %v", err))
+		}
+
+		if err := protojson.Unmarshal(jsonData, &req); err != nil {
+			panic(fmt.Sprintf("Erreur protojson.Unmarshal : %v", err))
+		}
+	}
+
+	stream, err := client.GetAll(ctx, &req)
 	if err != nil {
 		panic(fmt.Sprintf("❌ Erreur stream inventaire : %v", err))
 	}
@@ -132,6 +171,7 @@ func ReadInventory(ctx context.Context, conn *grpc.ClientConn, model string) []D
 
 		val := res.GetValue()
 		features := val.GetExtendedAttributes().GetFeatureEnabled()
+
 		devices = append(devices, DeviceInfo{
 			DeviceID:        val.GetKey().GetDeviceId().GetValue(),
 			Hostname:        val.GetHostname().GetValue(),
@@ -143,8 +183,10 @@ func ReadInventory(ctx context.Context, conn *grpc.ClientConn, model string) []D
 			MlagEnabled:     features["Mlag"],
 		})
 	}
+
 	return devices
 }
+
 
 func GetWorkspacesByState(ctx context.Context, conn *grpc.ClientConn, stateName string) []struct {
 	ID          string

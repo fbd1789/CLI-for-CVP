@@ -5,10 +5,7 @@ Une CLI modulaire en Go basée sur [Cobra](https://github.com/spf13/cobra) pour 
 
 ## 🚀 Fonctionnalités
 
-- Créer des workspaces
-- Créer et assigner des tags
 - Lire l'inventaire des équipements
-- Exécuter un processus complet (création + tag + assignation)
 
 ## 🛠 Prérequis
 
@@ -31,25 +28,13 @@ go build -o cvaas-cli
 
 ## 🔧 Commandes disponibles
 
-### Créer un workspace
-```bash
-./cvaas-cli --token token.txt --url url.txt create workspace
-```
-
-### Créer un tag
-```bash
-./cvaas-cli --token token.txt --url url.txt create tag
-```
-
 ### Voir l'inventaire des équipements
 ```bash
-./cvaas-cli --token token.txt --url url.txt get devices
+./cvaas-cli --token token.txt --url url.txt get devices --model cEOSLab --mlag
+./cvaas-cli --token token.txt --url url.txt get devices --model cEOSLab --danz
 ```
 
-### Exécuter le process complet (création + tag + assignation)
-```bash
-./cvaas-cli --token token.txt --url url.txt run process
-```
+
 
 ## 📁 Structure du projet
 
@@ -81,4 +66,4 @@ cvaas-cli.example.arista.io:443
 
 ---
 
-Développé avec ❤️ pour automatiser les tâches CloudVision.
+Développé pour automatiser les tâches CloudVision.

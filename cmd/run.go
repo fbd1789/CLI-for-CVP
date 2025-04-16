@@ -31,7 +31,7 @@ var runProcessCmd = &cobra.Command{
 		internal.CreateWorkspace(ctx, conn, workspaceID, requestID, "ADDTOTO")
 		internal.CreateTag(ctx, conn, workspaceID, tagLabel, tagValue, elementType, elementSubType)
 
-		devices := internal.ReadInventory(ctx, conn, modelFilter)
+		devices := internal.ReadInventory(ctx, conn, modelFilter, mlagFilter, danzFilter)
 		for _, d := range devices {
 			if d.Model == "cEOSLab" {
 				internal.AssignTagToDevice(ctx, conn, workspaceID, d.DeviceID, tagLabel, tagValue, elementType, elementSubType)

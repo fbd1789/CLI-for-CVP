@@ -1,70 +1,92 @@
 package cmd
 
 import (
-	"bufio"
+	// "bufio"
 	"cvaas_cli/internal"
 	"fmt"
 	"os"
-	"strings"
+	// "strings"
 	"time"
+	"path/filepath"
+	"gopkg.in/yaml.v2"
 
 	"github.com/spf13/cobra"
 )
 
+var workspaceName string
+
 var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Créer des ressources dans cvaas-cli",
-	Hidden: true, // Pour masquer la cmd dans le help
+}
+
+type WorkspaceEntry struct {
+	WorkspaceID   string `yaml:"workspaceID"`
+	RequestID     string `yaml:"RequestID"`
+	WorkspaceName string `yaml:"workspaceName"`
+}
+
+type WorkspaceYAML struct {
+	Workspace []WorkspaceEntry `yaml:"workspace"`
 }
 
 var createWorkspaceCmd = &cobra.Command{
 	Use:   "workspace",
 	Short: "Créer un workspace",
 	Run: func(cmd *cobra.Command, args []string) {
-		workspaceID := prompt("🆔 Workspace ID: ")
-		displayName := prompt("📛 Nom du workspace: ")
-		requestID := fmt.Sprintf("req-%d", time.Now().Unix())
+		if workspaceName == "" {
+			fmt.Println("❌ Veuillez spécifier un nom avec --name")
+			os.Exit(1)
+		}
+
+		workspaceID := fmt.Sprintf("ws-%d", time.Now().Unix())
+		requestID := workspaceID
 
 		ctx, cancel, conn := internal.Connect(tokenPath, urlPath)
 		defer cancel()
 		defer conn.Close()
 
-		internal.CreateWorkspace(ctx, conn, workspaceID, requestID, displayName)
-	},
-}
+		fmt.Printf("🆔 Workspace ID généré : %s\n", workspaceID)
+		internal.CreateWorkspace(ctx, conn, workspaceID, requestID, workspaceName)
 
-var createTagCmd = &cobra.Command{
-	Use:   "tag",
-	Short: "Créer un tag",
-	Run: func(cmd *cobra.Command, args []string) {
-		workspaceID := prompt("🆔 Workspace ID: ")
-		label := prompt("🏷️ Label : ")
-		value := prompt("💬 Valeur : ")
-		elementType := atoi(prompt("🔢 ElementType (ex: 1) : "))
-		elementSubType := atoi(prompt("🔢 ElementSubType (ex: 1) : "))
 
-		ctx, cancel, conn := internal.Connect(tokenPath, urlPath)
-		defer cancel()
-		defer conn.Close()
+		entry := WorkspaceEntry{
+			WorkspaceID:   workspaceID,
+			RequestID:     requestID,
+			WorkspaceName: workspaceName,
+		}
 
-		internal.CreateTag(ctx, conn, workspaceID, label, value, elementType, elementSubType)
+		yamlPath := filepath.Join("data", "workspace.yaml")
+
+		var workspaceFile WorkspaceYAML
+		if content, err := os.ReadFile(yamlPath); err == nil {
+			_ = yaml.Unmarshal(content, &workspaceFile)
+		}
+
+		workspaceFile.Workspace = append(workspaceFile.Workspace, entry)
+
+		savedData, err := yaml.Marshal(&workspaceFile)
+		if err != nil {
+			fmt.Printf("❌ Erreur encodage YAML : %v\n", err)
+			return
+		}
+
+		if err := os.MkdirAll("data", os.ModePerm); err != nil {
+			fmt.Printf("❌ Erreur création dossier data : %v\n", err)
+			return
+		}
+
+		if err := os.WriteFile(yamlPath, savedData, 0644); err != nil {
+			fmt.Printf("❌ Erreur écriture workspace.yaml : %v\n", err)
+			return
+		}
+
+		fmt.Println("✅ Workspace sauvegardé dans data/workspace.yaml")
 	},
 }
 
 func init() {
+	createWorkspaceCmd.Flags().StringVar(&workspaceName, "name", "", "Nom du workspace à créer (obligatoire)")
 	createCmd.AddCommand(createWorkspaceCmd)
-	createCmd.AddCommand(createTagCmd)
-}
-
-func prompt(msg string) string {
-	fmt.Print(msg)
-	reader := bufio.NewReader(os.Stdin)
-	text, _ := reader.ReadString('\n')
-	return strings.TrimSpace(text)
-}
-
-func atoi(s string) int {
-	var i int
-	fmt.Sscanf(s, "%d", &i)
-	return i
+	rootCmd.AddCommand(createCmd)
 }

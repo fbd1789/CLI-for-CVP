@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	// cvgrpc "github.com/aristanetworks/cloudvision-go/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
@@ -34,8 +35,8 @@ func Connect(tokenPath, urlPath string) (context.Context, context.CancelFunc, *g
 	if err != nil {
 		panic(fmt.Sprintf("❌ Erreur connexion gRPC : %v", err))
 	}
-
 	return ctx, cancel, conn
+
 }
 
 func readLineFromFile(filename string) (string, error) {

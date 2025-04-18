@@ -1,0 +1,10 @@
+workspace:
+- workspaceID: XXXXXX
+  RequestID: XXXXXXX
+  workspaceName: SGGGSG
+- workspaceID: ws-1744902438
+  RequestID: ws-1744902438
+  workspaceName: TEST234
+- workspaceID: ws-1744902490
+  RequestID: ws-1744902490
+  workspaceName: TEST2345

@@ -8,20 +8,38 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+// modelFilter est un flag CLI permettant de filtrer les devices par modèle spécifique
+// (ex: "DCS-7280SR", "cEOSLab", etc.).
 var modelFilter string
 
+// workspaceStateFilter est un flag CLI permettant de filtrer les workspaces
+// selon leur état (ex: "PENDING", "SUBMITTED", "ABANDONED", etc.).
 var workspaceStateFilter string
 
+// mlagFilter est un flag CLI indiquant si la commande "devices" doit retourner uniquement
+// les équipements avec MLAG activé.
 var mlagFilter bool
 
+// danzFilter est un flag CLI indiquant si la commande "devices" doit retourner uniquement
+// les équipements avec DANZ activé.
 var danzFilter bool
 
-
+// getCmd est la commande principale `get` du CLI, utilisée pour récupérer
+// des ressources depuis la plateforme CVaaS (CloudVision-as-a-Service).
+//
+// Cette commande regroupe les sous-commandes `get devices` et `get workspaces`.
 var getCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Récupérer des ressources depuis cvaas-cli",
 }
 
+// getDevicesCmd est une sous-commande de `get` utilisée pour afficher l'inventaire
+// des équipements disponibles sur CVaaS, avec la possibilité de filtrer par modèle,
+// MLAG ou DANZ.
+//
+// Conflit logique : les flags `--mlag` et `--danz` sont mutuellement exclusifs, et
+// leur combinaison est bloquée lors de l'exécution.
 var getDevicesCmd = &cobra.Command{
 	Use:   "devices",
 	Short: "Afficher l'inventaire des devices",
@@ -43,6 +61,10 @@ var getDevicesCmd = &cobra.Command{
 	},
 }
 
+// getWorkspacesCmd est une sous-commande de `get` utilisée pour afficher les workspaces
+// CVaaS filtrés selon un état particulier (ex: "SUBMITTED", "CONFLICTS").
+//
+// Utilise le flag `--state` pour sélectionner l'état voulu.
 var getWorkspacesCmd = &cobra.Command{
 	Use:   "workspaces",
 	Short: "Afficher les workspaces filtrés par état",
@@ -58,7 +80,7 @@ var getWorkspacesCmd = &cobra.Command{
 	},
 }
 
-
+// init configure les sous-commandes et leurs flags associés pour la commande principale `get`.
 func init() {
 	getCmd.AddCommand(getDevicesCmd)
 	getDevicesCmd.Flags().StringVar(&modelFilter, "model", "", "Filtrer par modèle (ex: cEOSLab)")

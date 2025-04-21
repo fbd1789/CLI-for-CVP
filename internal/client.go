@@ -15,8 +15,28 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// timeout définit la durée maximale pour l'établissement d'une connexion gRPC avec CVaaS.
+// Ce délai est utilisé pour éviter les blocages lors d'une tentative de connexion.
 const timeout = 30 * time.Second
 
+// Connect établit une connexion gRPC sécurisée avec la plateforme CVaaS,
+// en injectant le token d'authentification et l'URL du serveur depuis deux fichiers fournis.
+//
+// Les métadonnées de type "Authorization: Bearer <token>" sont ajoutées au contexte
+// pour permettre l'authentification auprès de CVaaS.
+//
+// Paramètres :
+//   - tokenPath : chemin vers un fichier contenant un token d'accès (une seule ligne).
+//   - urlPath : chemin vers un fichier contenant l'URL du serveur CVaaS.
+//
+// Retourne :
+//   - context.Context : contexte enrichi avec métadonnées pour les appels gRPC.
+//   - context.CancelFunc : fonction à appeler pour annuler/fermer le contexte.
+//   - *grpc.ClientConn : connexion gRPC active vers CVaaS.
+//
+// Panique :
+//   - Si la lecture des fichiers échoue.
+//   - Si la connexion gRPC ne peut pas être établie.
 func Connect(tokenPath, urlPath string) (context.Context, context.CancelFunc, *grpc.ClientConn) {
 	token, err := readLineFromFile(tokenPath)
 	if err != nil {
@@ -39,6 +59,17 @@ func Connect(tokenPath, urlPath string) (context.Context, context.CancelFunc, *g
 
 }
 
+// readLineFromFile lit la première ligne non vide d’un fichier donné et la retourne
+// sous forme de chaîne nettoyée (sans espaces ou retours à la ligne).
+//
+// Utilisé principalement pour lire des tokens ou des URLs à partir de fichiers.
+//
+// Paramètres :
+//   - filename : chemin absolu ou relatif du fichier à lire.
+//
+// Retourne :
+//   - string : contenu de la première ligne du fichier, sans espaces superflus.
+//   - error : une erreur si le fichier est vide ou inaccessible.
 func readLineFromFile(filename string) (string, error) {
 	file, err := os.Open(filename)
 	if err != nil {

@@ -15,6 +15,7 @@ import (
 	// "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// DeviceInfo contient les informations essentielles d'un équipement retourné par l'inventaire CVaaS.
 type DeviceInfo struct {
 	DeviceID        string
 	Hostname        string
@@ -25,7 +26,32 @@ type DeviceInfo struct {
 	DanzEnabled     bool
 	MlagEnabled     bool
 }
+// WorkspaceInfo contient les informations d'un workspace retourné pas CloudVision
+type WorkspaceInfo struct {
+	ID          string
+	DisplayName string
+	State       string
+}
 
+// ReadInventory interroge l'inventaire des équipements depuis la plateforme CloudVision-as-a-Service (CVaaS)
+// via gRPC. Elle retourne une liste de périphériques correspondant aux critères spécifiés.
+//
+// Un seul filtre entre `mlagFilter` et `danzFilter` peut être activé à la fois — l'activation des deux simultanément
+// provoque une panique, conformément aux limitations de l'API CVaaS.
+//
+// Paramètres :
+//   - ctx : contexte d'exécution pour gérer les timeouts et annulations.
+//   - conn : connexion gRPC vers le backend CVaaS.
+//   - model : nom de modèle (optionnel) pour filtrer les équipements (ex : "DCS-7280SR").
+//   - mlagFilter : filtre les équipements avec MLAG activé.
+//   - danzFilter : filtre les équipements avec DANZ activé.
+//
+// Retourne :
+//   - []DeviceInfo : une slice contenant les informations des équipements répondant aux critères.
+//
+// Panique :
+//   - Si mlagFilter et danzFilter sont tous deux activés simultanément.
+//   - Si une erreur survient lors de la sérialisation JSON ou la récupération du flux.
 func ReadInventory(ctx context.Context, conn *grpc.ClientConn, model string, mlagFilter, danzFilter bool) []DeviceInfo {
 	if mlagFilter && danzFilter {
 		panic("❌ Impossible d'utiliser simultanément les filtres MLAG et DANZ (limitation API CVaaS).")
@@ -91,11 +117,21 @@ func ReadInventory(ctx context.Context, conn *grpc.ClientConn, model string, mla
 	return devices
 }
 
-func GetWorkspacesByState(ctx context.Context, conn *grpc.ClientConn, stateName string) []struct {
-	ID          string
-	DisplayName string
-	State       string
-} {
+// GetWorkspacesByState retourne une liste de workspaces présents sur la plateforme CVaaS
+// dont l’état correspond à celui spécifié.
+//
+// Paramètres :
+//   - ctx : contexte d'exécution pour l'appel gRPC
+//   - conn : connexion gRPC active vers CloudVision
+//   - stateName : nom de l'état à filtrer (ex. "PENDING", "SUBMITTED") ; vide ou "NONE" pour ignorer le filtre.
+//
+// Retourne :
+//   - Une slice de WorkspaceInfo contenant les workspaces correspondant au filtre.
+//
+// Panique :
+//   - Si un état invalide est fourni
+//   - Si une erreur survient lors de la sérialisation ou du streaming gRPC
+func GetWorkspacesByState(ctx context.Context, conn *grpc.ClientConn, stateName string) []WorkspaceInfo {
 	stateMap := map[string]int{
 		"UNSPECIFIED":  0,
 		"UNRECOGNIZED": -1,
@@ -124,11 +160,7 @@ func GetWorkspacesByState(ctx context.Context, conn *grpc.ClientConn, stateName 
 		panic(fmt.Sprintf("Erreur stream : %v", err))
 	}
 
-	var results []struct {
-		ID          string
-		DisplayName string
-		State       string
-	}
+	var results []WorkspaceInfo 
 	for {
 		res, err := stream.Recv()
 		if err == io.EOF {
@@ -138,11 +170,7 @@ func GetWorkspacesByState(ctx context.Context, conn *grpc.ClientConn, stateName 
 			panic(fmt.Sprintf("Erreur lecture : %v", err))
 		}
 		val := res.GetValue()
-		results = append(results, struct {
-			ID          string
-			DisplayName string
-			State       string
-		}{
+		results = append(results, WorkspaceInfo {
 			ID:          val.GetKey().GetWorkspaceId().GetValue(),
 			DisplayName: val.GetDisplayName().GetValue(),
 			State:       val.GetState().String(),
@@ -152,7 +180,23 @@ func GetWorkspacesByState(ctx context.Context, conn *grpc.ClientConn, stateName 
 }
 
 
-
+// CreateWorkspace crée un nouveau workspace sur la plateforme CloudVision-as-a-Service (CVaaS)
+// en utilisant l'API gRPC de configuration des workspaces.
+//
+// Cette fonction construit dynamiquement une requête JSON contenant l'ID du workspace, son nom
+// lisible et un ID de requête (requestID), puis l'envoie à l'API CVaaS pour créer le workspace.
+//
+// Paramètres :
+//   - ctx : contexte d'exécution pour l'appel gRPC (gestion des délais, annulations, etc.)
+//   - conn : connexion gRPC active vers le backend CVaaS
+//   - workspaceID : identifiant unique du nouveau workspace à créer
+//   - requestID : identifiant de la requête (souvent utilisé pour le traçage ou l'idempotence)
+//   - displayName : nom lisible du workspace, tel qu’il apparaîtra dans l’interface utilisateur
+//
+// Panique :
+//   - Si une erreur survient lors du parsing JSON ou de l'appel gRPC à CVaaS.
+//
+// Affiche un message de confirmation dans la sortie standard en cas de succès.
 func CreateWorkspace(ctx context.Context, conn *grpc.ClientConn, workspaceID, requestID, displayName string) {
 	client := workspace.NewWorkspaceConfigServiceClient(conn)
 	jsonPayload := fmt.Sprintf(`{
